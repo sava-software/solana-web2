@@ -6,6 +6,8 @@ import systems.comodal.jsoniter.FieldBufferPredicate;
 import systems.comodal.jsoniter.JsonIterator;
 
 import java.math.BigInteger;
+import java.util.HashSet;
+import java.util.Set;
 
 import static systems.comodal.jsoniter.JsonIterator.fieldEquals;
 
@@ -14,7 +16,9 @@ public record JupiterUltraOrderRequestRecord(PublicKey inputMint,
                                              BigInteger amount,
                                              PublicKey taker,
                                              PublicKey referralAccount,
-                                             int referralFeeBps) implements JupiterUltraOrderRequest {
+                                             int referralFeeBps,
+                                             Set<String> excludeRouters,
+                                             Set<String> excludeDexes) implements JupiterUltraOrderRequest {
 
   static final class Parser implements FieldBufferPredicate {
 
@@ -57,6 +61,8 @@ public record JupiterUltraOrderRequestRecord(PublicKey inputMint,
     private PublicKey taker;
     private PublicKey referralAccount;
     private int referralFeeBps;
+    private Set<String> excludeRouters;
+    private Set<String> excludeDexes;
 
     BuilderImpl() {
     }
@@ -78,7 +84,9 @@ public record JupiterUltraOrderRequestRecord(PublicKey inputMint,
           amount,
           taker,
           referralAccount,
-          referralFeeBps
+          referralFeeBps,
+          excludeRouters,
+          excludeDexes
       );
     }
 
@@ -119,6 +127,36 @@ public record JupiterUltraOrderRequestRecord(PublicKey inputMint,
     }
 
     @Override
+    public Builder excludeRouters(final Set<String> excludeRouters) {
+      this.excludeRouters = excludeRouters;
+      return this;
+    }
+
+    @Override
+    public Builder excludeRouter(final String excludeRouter) {
+      if (this.excludeRouters == null) {
+        this.excludeRouters = new HashSet<>();
+      }
+      this.excludeRouters.add(excludeRouter);
+      return this;
+    }
+
+    @Override
+    public Builder excludeDexes(final Set<String> excludeDexes) {
+      this.excludeDexes = excludeDexes;
+      return this;
+    }
+
+    @Override
+    public Builder excludeDex(final String excludeDex) {
+      if (this.excludeDexes == null) {
+        this.excludeDexes = new HashSet<>();
+      }
+      this.excludeDexes.add(excludeDex);
+      return this;
+    }
+
+    @Override
     public PublicKey inputMint() {
       return inputMint;
     }
@@ -146,6 +184,16 @@ public record JupiterUltraOrderRequestRecord(PublicKey inputMint,
     @Override
     public int referralFeeBps() {
       return referralFeeBps;
+    }
+
+    @Override
+    public Set<String> excludeRouters() {
+      return excludeRouters;
+    }
+
+    @Override
+    public Set<String> excludeDexes() {
+      return excludeDexes;
     }
   }
 }

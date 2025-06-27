@@ -4,6 +4,7 @@ import software.sava.core.accounts.PublicKey;
 import systems.comodal.jsoniter.JsonIterator;
 
 import java.math.BigInteger;
+import java.util.Set;
 
 public interface JupiterUltraOrderRequest {
 
@@ -38,6 +39,10 @@ public interface JupiterUltraOrderRequest {
 
   int referralFeeBps();
 
+  Set<String> excludeRouters();
+
+  Set<String> excludeDexes();
+
   default String serialize() {
     final var builder = new StringBuilder(256);
     builder.append("inputMint=").append(inputMint().toBase58());
@@ -55,6 +60,14 @@ public interface JupiterUltraOrderRequest {
     if (referralFeeBps() > 0) {
       builder.append("&referralFeeBps=").append(referralFeeBps());
     }
+    final var excludeRouters = excludeRouters();
+    if (excludeRouters != null && !excludeRouters.isEmpty()) {
+      builder.append("&excludeRouters=").append(String.join(",", excludeRouters));
+    }
+    final var excludeDexes = excludeDexes();
+    if (excludeDexes != null && !excludeDexes.isEmpty()) {
+      builder.append("&excludeDexes=").append(String.join(",", excludeDexes));
+    }
     return builder.toString();
   }
 
@@ -66,12 +79,20 @@ public interface JupiterUltraOrderRequest {
 
     Builder inputMint(final PublicKey inputMint);
 
-    Builder referralAccount(final PublicKey referralAccount);
+    Builder outputMint(final PublicKey outputMint);
 
     Builder taker(final PublicKey taker);
 
-    Builder outputMint(final PublicKey outputMint);
+    Builder referralAccount(final PublicKey referralAccount);
 
     Builder referralFeeBps(final int referralFeeBps);
+
+    Builder excludeRouters(final Set<String> excludeRouters);
+
+    Builder excludeRouter(final String excludeRouter);
+
+    Builder excludeDexes(final Set<String> excludeDexes);
+
+    Builder excludeDex(final String excludeDex);
   }
 }
