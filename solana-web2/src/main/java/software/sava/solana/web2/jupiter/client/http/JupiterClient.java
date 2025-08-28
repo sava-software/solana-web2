@@ -2,7 +2,6 @@ package software.sava.solana.web2.jupiter.client.http;
 
 import software.sava.core.accounts.PublicKey;
 import software.sava.solana.web2.jupiter.client.http.request.JupiterQuoteRequest;
-import software.sava.solana.web2.jupiter.client.http.request.JupiterTokenTag;
 import software.sava.solana.web2.jupiter.client.http.response.*;
 
 import java.math.BigInteger;
@@ -177,30 +176,6 @@ public interface JupiterClient {
                                                                       final int limit);
 
   CompletableFuture<Map<PublicKey, JupiterTokenV2>> recentTokens();
-
-  @Deprecated
-  CompletableFuture<TokenContext> token(final PublicKey mint);
-
-  @Deprecated
-  CompletableFuture<Map<PublicKey, TokenContext>> allTokens();
-
-  CompletableFuture<List<PublicKey>> tradableMints();
-
-  @Deprecated
-  CompletableFuture<Map<PublicKey, TokenContext>> tokenMap(final JupiterTokenTag tag);
-
-  @Deprecated
-  CompletableFuture<Map<PublicKey, TokenContext>> tokenMap(final Collection<JupiterTokenTag> tags);
-
-  @Deprecated
-  default CompletableFuture<Map<PublicKey, TokenContext>> verifiedTokenMap() {
-    return tokenMap(JupiterTokenTag.verified);
-  }
-
-  @Deprecated
-  default CompletableFuture<Map<PublicKey, TokenContext>> liquidStakingTokens() {
-    return tokenMap(JupiterTokenTag.lst);
-  }
 
   CompletableFuture<Map<String, PublicKey>> getDexLabelToProgramIdMap();
 

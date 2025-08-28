@@ -1,9 +1,7 @@
 package software.sava.solana.web2.jupiter.client.http;
 
 import software.sava.core.accounts.PublicKey;
-import software.sava.rpc.json.PublicKeyEncoding;
 import software.sava.rpc.json.http.client.JsonHttpClient;
-import software.sava.solana.web2.jupiter.client.http.request.JupiterTokenTag;
 import software.sava.solana.web2.jupiter.client.http.response.*;
 
 import java.io.UncheckedIOException;
@@ -11,6 +9,7 @@ import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.net.UnknownServiceException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -25,33 +24,26 @@ import java.util.stream.Collectors;
 
 import static java.net.http.HttpResponse.BodyHandlers.ofByteArray;
 import static software.sava.rpc.json.PublicKeyEncoding.PARSE_BASE58_PUBLIC_KEY;
-import static software.sava.rpc.json.http.client.JsonResponseController.checkResponseCode;
 
 final class JupiterHttpClient extends JsonHttpClient implements JupiterClient {
 
   static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(13);
   static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("MMM-yyyy", Locale.ENGLISH);
 
-  private static final Function<HttpResponse<byte[]>, TokenContext> TOKEN = applyResponse(TokenContextRecord::parseToken);
-  private static final Function<HttpResponse<byte[]>, Map<PublicKey, TokenContext>> TOKENS = applyResponse(TokenContextRecord::parseTokens);
-
-  private static final Function<HttpResponse<byte[]>, JupiterTokenV2> TOKEN_V2 = applyResponse(JupiterTokenV2::parseToken);
-  private static final Function<HttpResponse<byte[]>, Map<PublicKey, JupiterTokenV2>> TOKENS_V2 = applyResponse(JupiterTokenV2::parseTokens);
-
-  private static final Function<HttpResponse<byte[]>, List<PublicKey>> MINTS = applyResponse(ji -> {
-    final var mints = new ArrayList<PublicKey>(1_048_576);
-    while (ji.readArray()) {
-      mints.add(PublicKeyEncoding.parseBase58Encoded(ji));
+  private static final Function<HttpResponse<?>, Map<PublicKey, JupiterTokenV2>> TOKENS_V2 = applyGenericResponse(JupiterTokenV2::parseTokens);
+  private static final Function<HttpResponse<?>, JupiterQuote> QUOTE_PARSER = applyGenericResponse(JupiterQuote::parse);
+  private static final Function<HttpResponse<?>, JupiterSwapTx> SWAP_TX = applyGenericResponse(JupiterSwapTx::parse);
+  private static final Function<HttpResponse<?>, byte[]> SWAP_INSTRUCTIONS_TX = response -> {
+    final var body = readBody(response);
+    final int statusCode = response.statusCode();
+    if (statusCode < 200 || statusCode >= 300) {
+      throw new UncheckedIOException(new UnknownServiceException(String.format(
+          "HTTP request failed with [httpCode:%d], [body=%s]", statusCode, new String(body))));
+    } else {
+      return body;
     }
-    return mints;
-  });
-  private static final Function<HttpResponse<byte[]>, JupiterQuote> QUOTE_PARSER = applyResponse(JupiterQuote::parse);
-  private static final Function<HttpResponse<byte[]>, JupiterSwapTx> SWAP_TX = applyResponse(JupiterSwapTx::parse);
-  private static final Function<HttpResponse<byte[]>, byte[]> SWAP_INSTRUCTIONS_TX = response -> {
-    checkResponseCode(response);
-    return response.body();
   };
-  private static final Function<HttpResponse<byte[]>, Map<String, PublicKey>> PROGRAM_LABEL_PARSER = applyResponse(ji -> {
+  private static final Function<HttpResponse<?>, Map<String, PublicKey>> PROGRAM_LABEL_PARSER = applyGenericResponse(ji -> {
     final var programLabels = new TreeMap<String, PublicKey>(String.CASE_INSENSITIVE_ORDER);
     for (PublicKey program; (program = ji.applyObjField(PARSE_BASE58_PUBLIC_KEY)) != null; ) {
       final var dex = ji.readString();
@@ -62,18 +54,12 @@ final class JupiterHttpClient extends JsonHttpClient implements JupiterClient {
     }
     return programLabels;
   });
-  private static final Function<HttpResponse<byte[]>, List<MarketRecord>> MARKET_CACHE_PARSER = applyResponse(MarketRecord::parse);
-  private static final Function<HttpResponse<byte[]>, ClaimAsrProof> ASR_PROOF = applyResponse(ClaimAsrProof::parseProof);
+  private static final Function<HttpResponse<?>, List<MarketRecord>> MARKET_CACHE_PARSER = applyGenericResponse(MarketRecord::parse);
+  private static final Function<HttpResponse<?>, ClaimAsrProof> ASR_PROOF = applyGenericResponse(ClaimAsrProof::parseProof);
 
   // Ultra
-  private static final Function<HttpResponse<byte[]>, JupiterUltraOrder> ULTRA_ORDER_PARSER = applyResponse(JupiterUltraOrder::parse);
-  private static final Function<HttpResponse<byte[]>, JupiterExecuteOrder> EXECUTE_ULTRA_ORDER_PARSER = applyResponse(JupiterExecuteOrder::parse);
-
-  // V1 Token API
-  private final URI tokenPath;
-  private final URI allTokensPath;
-  private final URI taggedTokensPath;
-  private final URI tradableMintsPath;
+  private static final Function<HttpResponse<?>, JupiterUltraOrder> ULTRA_ORDER_PARSER = applyGenericResponse(JupiterUltraOrder::parse);
+  private static final Function<HttpResponse<?>, JupiterExecuteOrder> EXECUTE_ULTRA_ORDER_PARSER = applyGenericResponse(JupiterExecuteOrder::parse);
 
   // V2 Token API
   private final URI v2TokenPath;
@@ -87,9 +73,9 @@ final class JupiterHttpClient extends JsonHttpClient implements JupiterClient {
   private final URI executeUltraOrderURI;
   private final String ultraOrderPathFormat;
   private final HttpRequest programLabelsRequest;
-  private final Function<HttpResponse<byte[]>, JupiterQuote> quoteParser;
-  private final Function<HttpResponse<byte[]>, JupiterUltraOrder> ultraOrderParser;
-  private final Function<HttpResponse<byte[]>, JupiterExecuteOrder> executeUltraOrderParser;
+  private final Function<HttpResponse<?>, JupiterQuote> quoteParser;
+  private final Function<HttpResponse<?>, JupiterUltraOrder> ultraOrderParser;
+  private final Function<HttpResponse<?>, JupiterExecuteOrder> executeUltraOrderParser;
 
   JupiterHttpClient(final URI quoteEndpoint,
                     final URI tokensEndpoint,
@@ -97,13 +83,8 @@ final class JupiterHttpClient extends JsonHttpClient implements JupiterClient {
                     final HttpClient httpClient,
                     final Duration requestTimeout,
                     final UnaryOperator<HttpRequest.Builder> extendRequest,
-                    final Predicate<HttpResponse<byte[]>> applyResponse) {
-    super(quoteEndpoint, httpClient, requestTimeout, extendRequest, applyResponse);
-    this.tokenPath = tokensEndpoint.resolve("/tokens/v1/token/");
-    this.allTokensPath = tokensEndpoint.resolve("/tokens/v1/all");
-    this.taggedTokensPath = tokensEndpoint.resolve("/tokens/v1/tagged/");
-    this.tradableMintsPath = tokensEndpoint.resolve("/tokens/v1/mints/tradable");
-
+                    final Predicate<HttpResponse<byte[]>> applyGenericResponse) {
+    super(quoteEndpoint, httpClient, requestTimeout, extendRequest, applyGenericResponse, null);
     this.v2TokenPath = tokensEndpoint.resolve("/tokens/v2/");
     this.v2RecentTokenPath = tokensEndpoint.resolve("/tokens/v2/recent");
 
@@ -128,9 +109,9 @@ final class JupiterHttpClient extends JsonHttpClient implements JupiterClient {
     }
     this.ultraOrderPathFormat = "/ultra/v1/order?amount=%s&%s";
     this.executeUltraOrderURI = quoteEndpoint.resolve("/ultra/v1/execute");
-    this.quoteParser = wrapParser(QUOTE_PARSER);
-    this.ultraOrderParser = wrapParser(ULTRA_ORDER_PARSER);
-    this.executeUltraOrderParser = wrapParser(EXECUTE_ULTRA_ORDER_PARSER);
+    this.quoteParser = wrapResponseParser(QUOTE_PARSER);
+    this.ultraOrderParser = wrapResponseParser(ULTRA_ORDER_PARSER);
+    this.executeUltraOrderParser = wrapResponseParser(EXECUTE_ULTRA_ORDER_PARSER);
   }
 
   private CompletableFuture<Map<PublicKey, JupiterTokenV2>> queryTokens(final String finalPathSegment,
@@ -173,45 +154,8 @@ final class JupiterHttpClient extends JsonHttpClient implements JupiterClient {
   }
 
   @Override
-  public CompletableFuture<TokenContext> token(final PublicKey mint) {
-    final var url = tokenPath.resolve(mint.toBase58());
-    return sendGetRequest(url, TOKEN);
-  }
-
-  @Override
-  public CompletableFuture<Map<PublicKey, TokenContext>> allTokens() {
-    return sendGetRequest(allTokensPath, TOKENS);
-  }
-
-  @Override
-  public CompletableFuture<List<PublicKey>> tradableMints() {
-    return sendGetRequest(tradableMintsPath, MINTS);
-  }
-
-  @Override
-  public CompletableFuture<Map<PublicKey, TokenContext>> tokenMap(final JupiterTokenTag tag) {
-    if (tag == null) {
-      return verifiedTokenMap();
-    }
-    final var url = taggedTokensPath.resolve(tag.name().replace('_', '-'));
-    return sendGetRequest(url, TOKENS);
-  }
-
-  @Override
-  public CompletableFuture<Map<PublicKey, TokenContext>> tokenMap(final Collection<JupiterTokenTag> tags) {
-    if (tags == null || tags.isEmpty()) {
-      return verifiedTokenMap();
-    }
-    final var url = taggedTokensPath.resolve(tags.stream()
-        .map(JupiterTokenTag::name)
-        .map(tag -> tag.replace('_', '-'))
-        .collect(Collectors.joining(",", "tag_list=", "")));
-    return sendGetRequest(url, TOKENS);
-  }
-
-  @Override
   public CompletableFuture<Map<String, PublicKey>> getDexLabelToProgramIdMap() {
-    return httpClient.sendAsync(programLabelsRequest, ofByteArray()).thenApply(wrapParser(PROGRAM_LABEL_PARSER));
+    return httpClient.sendAsync(programLabelsRequest, ofByteArray()).thenApply(wrapResponseParser(PROGRAM_LABEL_PARSER));
   }
 
   @Override
@@ -372,7 +316,7 @@ final class JupiterHttpClient extends JsonHttpClient implements JupiterClient {
         .newBuilder(URI.create("https://cache.jup.ag/markets?v=4"))
         .header("Content-Type", "application/json")
         .build();
-    return httpClient.sendAsync(request, ofByteArray()).thenApply(wrapParser(MARKET_CACHE_PARSER));
+    return httpClient.sendAsync(request, ofByteArray()).thenApply(wrapResponseParser(MARKET_CACHE_PARSER));
   }
 
   @Override

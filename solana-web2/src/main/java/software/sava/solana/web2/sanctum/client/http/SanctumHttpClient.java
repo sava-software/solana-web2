@@ -28,7 +28,7 @@ final class SanctumHttpClient extends JsonHttpClient implements SanctumClient {
 
   static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(13);
 
-  private static final Function<HttpResponse<byte[]>, Map<String, BigDecimal>> SOL_VALUE_PARSER = applyResponse(ji -> {
+  private static final Function<HttpResponse<?>, Map<String, BigDecimal>> SOL_VALUE_PARSER = applyGenericResponse(ji -> {
     final var prices = new HashMap<String, BigDecimal>();
     ji.skipUntil("solValues");
     for (String symbolOrMint; (symbolOrMint = ji.readObjField()) != null; ) {
@@ -36,7 +36,7 @@ final class SanctumHttpClient extends JsonHttpClient implements SanctumClient {
     }
     return prices;
   });
-  private static final Function<HttpResponse<byte[]>, Map<String, BigDecimal>> PRICE_PARSER = applyResponse(ji -> {
+  private static final Function<HttpResponse<?>, Map<String, BigDecimal>> PRICE_PARSER = applyGenericResponse(ji -> {
     final var prices = new HashMap<String, BigDecimal>();
     String mint;
     BigDecimal price;
@@ -53,8 +53,8 @@ final class SanctumHttpClient extends JsonHttpClient implements SanctumClient {
     }
     return prices;
   });
-  private static final Function<HttpResponse<byte[]>, SanctumQuote> QUOTE_PARSER = applyResponse(SanctumQuote::parse);
-  private static final Function<HttpResponse<byte[]>, byte[]> SWAP_PARSER = applyResponse(ji -> ji.skipUntil("tx").decodeBase64String());
+  private static final Function<HttpResponse<?>, SanctumQuote> QUOTE_PARSER = applyGenericResponse(SanctumQuote::parse);
+  private static final Function<HttpResponse<?>, byte[]> SWAP_PARSER = applyGenericResponse(ji -> ji.skipUntil("tx").decodeBase64String());
 
   private final URI swapURI;
   private final URI extraApiEndpoint;
@@ -65,7 +65,7 @@ final class SanctumHttpClient extends JsonHttpClient implements SanctumClient {
                     final Duration requestTimeout,
                     final UnaryOperator<HttpRequest.Builder> extendRequest,
                     final Predicate<HttpResponse<byte[]>> applyResponse) {
-    super(apiEndpoint, httpClient, requestTimeout, extendRequest, applyResponse);
+    super(apiEndpoint, httpClient, requestTimeout, extendRequest, applyResponse, null);
     this.swapURI = apiEndpoint.resolve("/v1/swap");
     this.extraApiEndpoint = extraApiEndpoint;
   }
@@ -82,9 +82,10 @@ final class SanctumHttpClient extends JsonHttpClient implements SanctumClient {
                                                final BigInteger amount,
                                                final SwapMode swapMode) {
     return sendGetRequest(QUOTE_PARSER, String.format(
-        "/v1/swap/quote?input=%s&outputLstMint=%s&amount=%s&mode=%s",
-        inputMint, outputMint, amount, swapMode
-    ));
+            "/v1/swap/quote?input=%s&outputLstMint=%s&amount=%s&mode=%s",
+            inputMint, outputMint, amount, swapMode
+        )
+    );
   }
 
   @Override

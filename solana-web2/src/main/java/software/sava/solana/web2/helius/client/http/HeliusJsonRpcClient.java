@@ -23,8 +23,8 @@ import static software.sava.solana.web2.helius.client.http.request.PriorityFeeRe
 final class HeliusJsonRpcClient extends JsonRpcHttpClient implements HeliusClient {
 
   static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(13);
-  private static final Function<HttpResponse<byte[]>, PriorityFeesEstimates> PRIORITY_FEES = applyResponseResult(PriorityFeesEstimates::parseLevels);
-  private static final Function<HttpResponse<byte[]>, BigDecimal> PRIORITY_FEE = applyResponseResult(ji -> ji.skipUntil("priorityFeeEstimate").readBigDecimalDropZeroes());
+  private static final Function<HttpResponse<?>, PriorityFeesEstimates> PRIORITY_FEES = applyGenericResponseResult(PriorityFeesEstimates::parseLevels);
+  private static final Function<HttpResponse<?>, BigDecimal> PRIORITY_FEE = applyGenericResponseResult(ji -> ji.skipUntil("priorityFeeEstimate").readBigDecimalDropZeroes());
 
   private final AtomicLong id;
 
@@ -33,15 +33,17 @@ final class HeliusJsonRpcClient extends JsonRpcHttpClient implements HeliusClien
                       final Duration requestTimeout,
                       final UnaryOperator<HttpRequest.Builder> extendRequest,
                       final Predicate<HttpResponse<byte[]>> applyResponse) {
-    super(endpoint, httpClient, requestTimeout, extendRequest, applyResponse);
+    super(endpoint, httpClient, requestTimeout, extendRequest, applyResponse, null);
     this.id = new AtomicLong(System.currentTimeMillis());
   }
 
   @Override
   public CompletableFuture<PriorityFeesEstimates> getPriorityFeeEstimate(final String params) {
     return sendPostRequest(PRIORITY_FEES, String.format("""
-            {"jsonrpc":"2.0","id":%d,"method":"getPriorityFeeEstimate","params":[{%s}]}""",
-        id.incrementAndGet(), params));
+                {"jsonrpc":"2.0","id":%d,"method":"getPriorityFeeEstimate","params":[{%s}]}""",
+            id.incrementAndGet(), params
+        )
+    );
   }
 
   @Override
@@ -83,7 +85,8 @@ final class HeliusJsonRpcClient extends JsonRpcHttpClient implements HeliusClien
   public CompletableFuture<BigDecimal> getRecommendedPriorityFeeEstimate(final String params) {
     final var body = String.format("""
             {"jsonrpc":"2.0","id":%d,"method":"getPriorityFeeEstimate","params":[{%s}]}""",
-        id.incrementAndGet(), params);
+        id.incrementAndGet(), params
+    );
     return sendPostRequest(PRIORITY_FEE, body);
   }
 
