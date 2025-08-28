@@ -11,9 +11,11 @@ User documentation lives at [sava.software](https://sava.software/).
 
 ## Contributions
 
-Please note that all contributions require agreeing to the [Sava Engineering, Inc. CLA](https://gist.github.com/jpe7s/09546e42783187c6d04f38e04184ecfa).
+Please note that all contributions require agreeing to
+the [Sava Engineering, Inc. CLA](https://gist.github.com/jpe7s/09546e42783187c6d04f38e04184ecfa).
 
-Tests are needed and welcomed. Otherwise, [please reach out](https://github.com/sava-software) before working on a pull request.
+Tests are needed and welcomed. Otherwise, [please reach out](https://github.com/sava-software) before working on a pull
+request.
 
 ## Build
 
